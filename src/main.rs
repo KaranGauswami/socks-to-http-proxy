@@ -56,9 +56,9 @@ async fn proxy(req: Request<Body>, socks_address: String) -> Result<Response<Bod
                 .unwrap()
                 .next()
                 .unwrap();
-            match req.into_body().on_upgrade().await {
+            match hyper::upgrade::on(req).await {
                 Ok(upgraded) => {
-                    if let Err(e) = tunnel(upgraded, addr, plain, socks_address).await {
+                    if let Err(e) = tunnel(upgraded, plain, socks_address).await {
                         eprintln!("server io error: {}", e);
                     };
                 }
@@ -73,17 +73,14 @@ async fn proxy(req: Request<Body>, socks_address: String) -> Result<Response<Bod
 
 async fn tunnel(
     upgraded: hyper::upgrade::Upgraded,
-    addr: SocketAddr,
     plain: String,
     socks_address: String,
 ) -> std::io::Result<()> {
-    let _server = tokio::net::TcpStream::connect(addr).await?;
-
     let socket_address = socks_address.to_socket_addrs().unwrap().next().unwrap();
 
-    let c = plain.into_target_addr();
-    let b = c.unwrap();
-    let a = tokio_socks::tcp::Socks5Stream::connect(socket_address, b)
+    let target_addr = plain.into_target_addr();
+    let target_addr = target_addr.unwrap();
+    let a = tokio_socks::tcp::Socks5Stream::connect(socket_address, target_addr)
         .await
         .expect("Cannot Connect to Socks5 Server");
 
