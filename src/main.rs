@@ -26,6 +26,7 @@ async fn main() {
     let socks_address = socks_address.to_socket_addrs().unwrap().next().unwrap();
     let port = args.port;
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let socks_address = socks_address.to_socket_addrs().unwrap().next().unwrap();
     let make_service = make_service_fn(move |_| {
         let socks_address = socks_address.clone();
         async move { Ok::<_, Infallible>(service_fn(move |req| proxy(req, socks_address.clone()))) }
