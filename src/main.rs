@@ -1,10 +1,11 @@
-use color_eyre::eyre::Result;
+use anyhow::Result;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::upgrade::Upgraded;
 use hyper::{Body, Request, Response, Server};
 use std::convert::Infallible;
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::SocketAddr;
 use structopt::StructOpt;
+use tokio_socks::tcp::Socks5Stream;
 use tokio_socks::IntoTargetAddr;
 
 #[derive(StructOpt, Debug)]
@@ -16,20 +17,17 @@ struct Cli {
 
     /// Socks5 proxy address
     #[structopt(short, long, default_value = "127.0.0.1:1080")]
-    socks_address: String,
+    socks_address: SocketAddr,
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     let args = Cli::from_args();
     let socks_address = args.socks_address;
-    let socks_address = socks_address.to_socket_addrs().unwrap().next().unwrap();
     let port = args.port;
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    let socks_address = socks_address.to_socket_addrs().unwrap().next().unwrap();
-    let make_service = make_service_fn(move |_| {
-        let socks_address = socks_address.clone();
-        async move { Ok::<_, Infallible>(service_fn(move |req| proxy(req, socks_address.clone()))) }
+    let make_service = make_service_fn(move |_| async move {
+        Ok::<_, Infallible>(service_fn(move |req| proxy(req, socks_address.clone())))
     });
     let server = Server::bind(&addr)
         .http1_preserve_header_case(true)
@@ -39,10 +37,9 @@ async fn main() {
     if let Err(e) = server.await {
         eprintln!("{:?}", e);
     };
+    Ok(())
 }
 async fn proxy(req: Request<Body>, socks_address: SocketAddr) -> Result<Response<Body>> {
-    let _response = Response::new(Body::empty());
-
     if req.method() == hyper::Method::CONNECT {
         tokio::task::spawn(async move {
             let plain = req.uri().authority().unwrap().as_str().to_string();
@@ -61,21 +58,15 @@ async fn proxy(req: Request<Body>, socks_address: SocketAddr) -> Result<Response
     }
 }
 
-async fn tunnel<'t, I>(
-    mut upgraded: Upgraded,
-    plain: I,
-    socks_address: SocketAddr,
-) -> std::io::Result<()>
+async fn tunnel<'t, I>(mut upgraded: Upgraded, plain: I, socks_address: SocketAddr) -> Result<()>
 where
     I: IntoTargetAddr<'t>,
 {
-    let mut server = tokio_socks::tcp::Socks5Stream::connect(socks_address, plain)
-        .await
-        .expect("Cannot Connect to Socks5 Server");
+    let mut stream = Socks5Stream::connect(socks_address, plain).await?;
 
     // Proxying data
     let (from_client, from_server) =
-        tokio::io::copy_bidirectional(&mut upgraded, &mut server).await?;
+        tokio::io::copy_bidirectional(&mut upgraded, &mut stream).await?;
 
     // Print message when done
     println!(
