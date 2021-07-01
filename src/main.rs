@@ -1,8 +1,7 @@
 use color_eyre::eyre::Result;
-use futures_util::future::try_join;
-use hyper::server::Server;
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Request, Response};
+use hyper::upgrade::Upgraded;
+use hyper::{Body, Request, Response, Server};
 use std::convert::Infallible;
 use std::net::{SocketAddr, ToSocketAddrs};
 use structopt::StructOpt;
@@ -24,41 +23,31 @@ struct Cli {
 async fn main() {
     let args = Cli::from_args();
     let socks_address = args.socks_address;
+    let socks_address = socks_address.to_socket_addrs().unwrap().next().unwrap();
     let port = args.port;
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let make_service = make_service_fn(move |_| {
         let socks_address = socks_address.clone();
-        async move {
-            Ok::<_, Infallible>(service_fn(move |req| {
-                let socks_address = socks_address.clone();
-                proxy(req, socks_address)
-            }))
-        }
+        async move { Ok::<_, Infallible>(service_fn(move |req| proxy(req, socks_address.clone()))) }
     });
-    let server = Server::bind(&addr).serve(make_service);
+    let server = Server::bind(&addr)
+        .http1_preserve_header_case(true)
+        .http1_title_case_headers(true)
+        .serve(make_service);
     println!("Server is listening on {}", addr);
     if let Err(e) = server.await {
         eprintln!("{:?}", e);
     };
 }
-async fn proxy(req: Request<Body>, socks_address: String) -> Result<Response<Body>> {
+async fn proxy(req: Request<Body>, socks_address: SocketAddr) -> Result<Response<Body>> {
     let _response = Response::new(Body::empty());
 
     if req.method() == hyper::Method::CONNECT {
         tokio::task::spawn(async move {
             let plain = req.uri().authority().unwrap().as_str().to_string();
-            let addr = req
-                .uri()
-                .authority()
-                .unwrap()
-                .as_str()
-                .to_socket_addrs()
-                .unwrap()
-                .next()
-                .unwrap();
-            match req.into_body().on_upgrade().await {
+            match hyper::upgrade::on(req).await {
                 Ok(upgraded) => {
-                    if let Err(e) = tunnel(upgraded, addr, plain, socks_address).await {
+                    if let Err(e) = tunnel(upgraded, plain, socks_address).await {
                         eprintln!("server io error: {}", e);
                     };
                 }
@@ -71,43 +60,26 @@ async fn proxy(req: Request<Body>, socks_address: String) -> Result<Response<Bod
     }
 }
 
-async fn tunnel(
-    upgraded: hyper::upgrade::Upgraded,
-    addr: SocketAddr,
-    plain: String,
-    socks_address: String,
-) -> std::io::Result<()> {
-    let _server = tokio::net::TcpStream::connect(addr).await?;
-
-    let socket_address = socks_address.to_socket_addrs().unwrap().next().unwrap();
-
-    let c = plain.into_target_addr();
-    let b = c.unwrap();
-    let a = tokio_socks::tcp::Socks5Stream::connect(socket_address, b)
+async fn tunnel<'t, I>(
+    mut upgraded: Upgraded,
+    plain: I,
+    socks_address: SocketAddr,
+) -> std::io::Result<()>
+where
+    I: IntoTargetAddr<'t>,
+{
+    let mut server = tokio_socks::tcp::Socks5Stream::connect(socks_address, plain)
         .await
         .expect("Cannot Connect to Socks5 Server");
 
-    let amounts = {
-        let (mut server_rd, mut server_wr) = tokio::io::split(a);
-        let (mut client_rd, mut client_wr) = tokio::io::split(upgraded);
-
-        let client_to_server = tokio::io::copy(&mut client_rd, &mut server_wr);
-        let server_to_client = tokio::io::copy(&mut server_rd, &mut client_wr);
-
-        try_join(client_to_server, server_to_client).await
-    };
+    // Proxying data
+    let (from_client, from_server) =
+        tokio::io::copy_bidirectional(&mut upgraded, &mut server).await?;
 
     // Print message when done
-    match amounts {
-        Ok((from_client, from_server)) => {
-            println!(
-                "client wrote {} bytes and received {} bytes",
-                from_client, from_server
-            );
-        }
-        Err(e) => {
-            eprintln!("tunnel error: {}", e);
-        }
-    };
+    println!(
+        "client wrote {} bytes and received {} bytes",
+        from_client, from_server
+    );
     Ok(())
 }
