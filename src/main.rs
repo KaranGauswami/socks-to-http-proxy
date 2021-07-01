@@ -9,7 +9,7 @@ use tokio_socks::tcp::Socks5Stream;
 use tokio_socks::IntoTargetAddr;
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "sthp")]
+#[structopt(name = "sthp", about = "Convert Socks5 proxy into Http proxy")]
 struct Cli {
     #[structopt(short, long, default_value = "8080")]
     /// port where Http proxy should listen
@@ -54,7 +54,9 @@ async fn proxy(req: Request<Body>, socks_address: SocketAddr) -> Result<Response
         });
         Ok(Response::new(Body::empty()))
     } else {
-        Ok(Response::new(Body::empty()))
+        let mut resp = Response::new(Body::from("CONNECT must be to a socket address"));
+        *resp.status_mut() = http::StatusCode::BAD_REQUEST;
+        Ok(resp)
     }
 }
 
