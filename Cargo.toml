@@ -2,7 +2,7 @@
 name = "sthp"
 version = "0.2.0"
 authors = ["Karan Gauswami <karangauswami.dev@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -12,5 +12,5 @@ http = "0.2"
 hyper = { version = "0.14", features = ["http1", "server", "tcp"]}
 structopt = { version="0.3", default-features = false}
 tokio-socks = "0.5"
-tokio = { version = "1.7", features = ["macros", "rt-multi-thread"] }
-anyhow = "1.0.41"
+tokio = { version = "1.13", features = ["macros", "rt-multi-thread"] }
+anyhow = "1.0"
