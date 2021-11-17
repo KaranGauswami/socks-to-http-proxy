@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
     let port = args.port;
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let make_service = make_service_fn(move |_| async move {
-        Ok::<_, Infallible>(service_fn(move |req| proxy(req, socks_address.clone())))
+        Ok::<_, Infallible>(service_fn(move |req| proxy(req, socks_address)))
     });
     let server = Server::bind(&addr)
         .http1_preserve_header_case(true)
