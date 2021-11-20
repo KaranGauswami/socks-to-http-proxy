@@ -1,7 +1,10 @@
 use anyhow::Result;
+use http::Uri;
+use hyper::client::HttpConnector;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::upgrade::Upgraded;
 use hyper::{Body, Request, Response, Server};
+use hyper_socks2::SocksConnector;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use structopt::StructOpt;
@@ -33,26 +36,44 @@ async fn main() -> Result<()> {
         .http1_preserve_header_case(true)
         .http1_title_case_headers(true)
         .serve(make_service);
-    println!("Server is listening on {}", addr);
+    println!("Server is listening on http://{}", addr);
     if let Err(e) = server.await {
-        eprintln!("{:?}", e);
+        eprintln!("server error: {}", e);
     };
     Ok(())
 }
+fn host_addr(uri: &http::Uri) -> Option<String> {
+    uri.authority().and_then(|auth| Some(auth.to_string()))
+}
 async fn proxy(req: Request<Body>, socks_address: SocketAddr) -> Result<Response<Body>> {
-    if req.method() == hyper::Method::CONNECT {
-        tokio::task::spawn(async move {
-            let plain = req.uri().authority().unwrap().as_str().to_string();
-            match hyper::upgrade::on(req).await {
-                Ok(upgraded) => {
-                    if let Err(e) = tunnel(upgraded, plain, socks_address).await {
-                        eprintln!("server io error: {}", e);
-                    };
+    let mut connector = HttpConnector::new();
+    connector.enforce_http(false);
+    let proxy_addr = socks_address.to_string();
+    let proxy_addr = Box::leak(Box::new(format!("socks://{}", proxy_addr.to_string())));
+    let proxy_addr = Uri::from_static(proxy_addr);
+    if let Some(plain) = host_addr(req.uri()) {
+        if req.method() == hyper::Method::CONNECT {
+            tokio::task::spawn(async move {
+                match hyper::upgrade::on(req).await {
+                    Ok(upgraded) => {
+                        if let Err(e) = tunnel(upgraded, plain, socks_address).await {
+                            eprintln!("server io error: {}", e);
+                        };
+                    }
+                    Err(e) => eprintln!("upgrade error: {}", e),
                 }
-                Err(e) => eprintln!("upgrade error: {}", e),
-            }
-        });
-        Ok(Response::new(Body::empty()))
+            });
+            Ok(Response::new(Body::empty()))
+        } else {
+            let connector = SocksConnector {
+                auth: None,
+                proxy_addr,
+                connector,
+            };
+            let client = hyper::Client::builder().build(connector);
+            let response = client.request(req).await;
+            Ok(response.expect("Cannot make HTTP request"))
+        }
     } else {
         let mut resp = Response::new(Body::from("CONNECT must be to a socket address"));
         *resp.status_mut() = http::StatusCode::BAD_REQUEST;
