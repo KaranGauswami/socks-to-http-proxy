@@ -43,7 +43,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 fn host_addr(uri: &http::Uri) -> Option<String> {
-    uri.authority().and_then(|auth| Some(auth.to_string()))
+    uri.authority().map(|auth| auth.to_string())
 }
 async fn proxy(req: Request<Body>, socks_address: SocketAddr) -> Result<Response<Body>> {
     let mut connector = HttpConnector::new();
