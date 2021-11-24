@@ -48,8 +48,7 @@ fn host_addr(uri: &http::Uri) -> Option<String> {
 async fn proxy(req: Request<Body>, socks_address: SocketAddr) -> Result<Response<Body>> {
     let mut connector = HttpConnector::new();
     connector.enforce_http(false);
-    let proxy_addr = socks_address.to_string();
-    let proxy_addr = Box::leak(Box::new(format!("socks://{}", proxy_addr.to_string())));
+    let proxy_addr = Box::leak(Box::new(format!("socks://{}", socks_address)));
     let proxy_addr = Uri::from_static(proxy_addr);
     if let Some(plain) = host_addr(req.uri()) {
         if req.method() == hyper::Method::CONNECT {
