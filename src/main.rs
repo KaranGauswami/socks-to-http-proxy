@@ -1,4 +1,5 @@
 use anyhow::Result;
+use clap::Parser;
 use http::Uri;
 use hyper::client::HttpConnector;
 use hyper::service::{make_service_fn, service_fn};
@@ -8,19 +9,18 @@ use hyper_socks2::SocksConnector;
 use log::debug;
 use std::convert::Infallible;
 use std::net::SocketAddr;
-use structopt::StructOpt;
 use tokio_socks::tcp::Socks5Stream;
 use tokio_socks::{IntoTargetAddr, ToProxyAddrs};
 
-#[derive(StructOpt, Debug)]
-#[structopt(name = "sthp", about = "Convert Socks5 proxy into Http proxy")]
+#[derive(Parser, Debug)]
+#[clap(name = "sthp", about = "Convert Socks5 proxy into Http proxy")]
 struct Cli {
-    #[structopt(short, long, default_value = "8080")]
+    #[clap(short, long, default_value = "8080")]
     /// port where Http proxy should listen
     port: u16,
 
     /// Socks5 proxy address
-    #[structopt(short, long, default_value = "127.0.0.1:1080")]
+    #[clap(short, long, default_value = "127.0.0.1:1080")]
     socks_address: SocketAddr,
 }
 
@@ -28,7 +28,7 @@ struct Cli {
 async fn main() -> Result<()> {
     env_logger::init();
 
-    let args = Cli::from_args();
+    let args = Cli::parse();
     let socks_address = args.socks_address;
     let port = args.port;
     let addr = SocketAddr::from(([0, 0, 0, 0], port));

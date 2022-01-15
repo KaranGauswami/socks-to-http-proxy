@@ -35,13 +35,10 @@ There are a few options for using `sthp`.
 USAGE:
     sthp [OPTIONS]
 
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-
 OPTIONS:
-    -p, --port <port>                      port where Http proxy should listen [default: 8080]
-    -s, --socks-address <socks-address>    Socks5 proxy address [default: 127.0.0.1:1080]
+    -h, --help                             Print help information
+    -p, --port <PORT>                      port where Http proxy should listen [default: 8080]
+    -s, --socks-address <SOCKS_ADDRESS>    Socks5 proxy address [default: 127.0.0.1:1080]
 ```
 
 ## License
