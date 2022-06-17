@@ -5,7 +5,7 @@ use hyper::client::HttpConnector;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::upgrade::Upgraded;
 use hyper::{Body, Request, Response, Server};
-use hyper_socks2::SocksConnector;
+use hyper_socks2::{Auth, SocksConnector};
 use log::debug;
 use std::convert::Infallible;
 use std::net::SocketAddr;
@@ -22,6 +22,14 @@ struct Cli {
     /// Socks5 proxy address
     #[clap(short, long, default_value = "127.0.0.1:1080")]
     socks_address: SocketAddr,
+
+    /// Socks5 username
+    #[clap(short = 'u', long)]
+    username: Option<String>,
+
+    /// Socks5 username
+    #[clap(short = 'P', long)]
+    password: Option<String>,
 }
 
 #[tokio::main]
@@ -31,9 +39,18 @@ async fn main() -> Result<()> {
     let args = Cli::parse();
     let socks_address = args.socks_address;
     let port = args.port;
+
+    let username = args.username;
+    let password = args.password;
+    let auth = if let (Some(username), Some(password)) = (username, password) {
+        Some(Auth::new(username, password))
+    } else {
+        None
+    };
+    let auth = &*Box::leak(Box::new(auth));
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let make_service = make_service_fn(move |_| async move {
-        Ok::<_, Infallible>(service_fn(move |req| proxy(req, socks_address)))
+        Ok::<_, Infallible>(service_fn(move |req| proxy(req, socks_address, auth)))
     });
     let server = Server::bind(&addr)
         .http1_preserve_header_case(true)
@@ -48,7 +65,11 @@ async fn main() -> Result<()> {
 fn host_addr(uri: &http::Uri) -> Option<String> {
     uri.authority().map(|auth| auth.to_string())
 }
-async fn proxy(req: Request<Body>, socks_address: SocketAddr) -> Result<Response<Body>> {
+async fn proxy(
+    req: Request<Body>,
+    socks_address: SocketAddr,
+    auth: &'static Option<Auth>,
+) -> Result<Response<Body>> {
     let mut connector = HttpConnector::new();
     connector.enforce_http(false);
     let proxy_addr = Box::leak(Box::new(format!("socks://{}", socks_address)));
@@ -58,7 +79,7 @@ async fn proxy(req: Request<Body>, socks_address: SocketAddr) -> Result<Response
             tokio::task::spawn(async move {
                 match hyper::upgrade::on(req).await {
                     Ok(upgraded) => {
-                        if let Err(e) = tunnel(upgraded, plain, socks_address).await {
+                        if let Err(e) = tunnel(upgraded, plain, socks_address, auth).await {
                             debug!("server io error: {}", e);
                         };
                     }
@@ -68,7 +89,8 @@ async fn proxy(req: Request<Body>, socks_address: SocketAddr) -> Result<Response
             Ok(Response::new(Body::empty()))
         } else {
             let connector = SocksConnector {
-                auth: None,
+                // TODO: Can we remove this clone ?
+                auth: auth.clone(),
                 proxy_addr,
                 connector,
             };
@@ -77,18 +99,29 @@ async fn proxy(req: Request<Body>, socks_address: SocketAddr) -> Result<Response
             Ok(response.expect("Cannot make HTTP request"))
         }
     } else {
-        let mut resp = Response::new(Body::from("CONNECT must be to a socket address"));
+        let mut resp = Response::new("CONNECT must be to a socket address".into());
         *resp.status_mut() = http::StatusCode::BAD_REQUEST;
         Ok(resp)
     }
 }
 
-async fn tunnel<'t, P, T>(mut upgraded: Upgraded, plain: T, socks_address: P) -> Result<()>
+async fn tunnel<'t, P, T>(
+    mut upgraded: Upgraded,
+    plain: T,
+    socks_address: P,
+    auth: &Option<Auth>,
+) -> Result<()>
 where
     P: ToProxyAddrs,
     T: IntoTargetAddr<'t>,
 {
-    let mut stream = Socks5Stream::connect(socks_address, plain).await?;
+    let mut stream = if let Some(auth) = auth {
+        let username = &auth.username;
+        let password = &auth.password;
+        Socks5Stream::connect_with_password(socks_address, plain, username, password).await?
+    } else {
+        Socks5Stream::connect(socks_address, plain).await?
+    };
 
     // Proxying data
     let (from_client, from_server) =
