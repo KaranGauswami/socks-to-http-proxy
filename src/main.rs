@@ -27,7 +27,7 @@ struct Cli {
     #[clap(short = 'u', long)]
     username: Option<String>,
 
-    /// Socks5 username
+    /// Socks5 password
     #[clap(short = 'P', long)]
     password: Option<String>,
 }
