@@ -37,10 +37,10 @@ USAGE:
 
 OPTIONS:
     -h, --help                             Print help information
+        --listen-ip <LISTEN_IP>            [default: 0.0.0.0]
     -p, --port <PORT>                      port where Http proxy should listen [default: 8080]
+    -P, --password <PASSWORD>              Socks5 password
     -s, --socks-address <SOCKS_ADDRESS>    Socks5 proxy address [default: 127.0.0.1:1080]
+    -u, --username <USERNAME>              Socks5 username
+    -V, --version                          Print version information    
 ```
-
-## License
-
-`sthp` is released under the terms of either the MIT or Apache 2.0 license. See the LICENSE-MIT or LICENSE-APACHE file for the details.
