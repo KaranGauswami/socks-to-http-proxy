@@ -8,7 +8,7 @@ An executable to convert SOCKS5 proxy into HTTP proxy
 
 ## How it works
 
-It uses hyper library HTTP proxy example and adds functionality to connect via Socks5
+It uses hyper library HTTP proxy [example](https://github.com/hyperium/hyper/blob/master/examples/http_proxy.rs) and adds functionality to connect via Socks5
 
 ## Compiling
 
