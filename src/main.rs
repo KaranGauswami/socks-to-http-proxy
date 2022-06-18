@@ -1,5 +1,5 @@
-use anyhow::Result;
-use clap::Parser;
+use clap::{ErrorKind, IntoApp, Parser};
+use color_eyre::eyre::Result;
 use http::Uri;
 use hyper::client::HttpConnector;
 use hyper::service::{make_service_fn, service_fn};
@@ -8,16 +8,19 @@ use hyper::{Body, Request, Response, Server};
 use hyper_socks2::{Auth, SocksConnector};
 use log::debug;
 use std::convert::Infallible;
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 use tokio_socks::tcp::Socks5Stream;
 use tokio_socks::{IntoTargetAddr, ToProxyAddrs};
 
 #[derive(Parser, Debug)]
-#[clap(name = "sthp", about = "Convert Socks5 proxy into Http proxy")]
+#[clap(author, version, about,long_about=None)]
 struct Cli {
-    #[clap(short, long, default_value = "8080")]
     /// port where Http proxy should listen
+    #[clap(short, long, default_value = "8080",value_parser = clap::value_parser!(u16).range(1..))]
     port: u16,
+
+    #[clap(long, default_value = "0.0.0.0")]
+    listen_ip: Ipv4Addr,
 
     /// Socks5 proxy address
     #[clap(short, long, default_value = "127.0.0.1:1080")]
@@ -35,6 +38,7 @@ struct Cli {
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
+    color_eyre::install()?;
 
     let args = Cli::parse();
     let socks_address = args.socks_address;
@@ -42,13 +46,26 @@ async fn main() -> Result<()> {
 
     let username = args.username;
     let password = args.password;
-    let auth = if let (Some(username), Some(password)) = (username, password) {
-        Some(Auth::new(username, password))
-    } else {
-        None
+    let mut cmd = Cli::command();
+
+    let auth = match (username, password) {
+        (Some(username), Some(password)) => Some(Auth::new(username, password)),
+        (Some(_), None) => cmd
+            .error(
+                ErrorKind::ArgumentNotFound,
+                "--password is required if --username is used",
+            )
+            .exit(),
+        (None, Some(_)) => cmd
+            .error(
+                ErrorKind::ArgumentNotFound,
+                "--username is required if --password is used",
+            )
+            .exit(),
+        (None, None) => None,
     };
     let auth = &*Box::leak(Box::new(auth));
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let addr = SocketAddr::from((args.listen_ip, port));
     let make_service = make_service_fn(move |_| async move {
         Ok::<_, Infallible>(service_fn(move |req| proxy(req, socks_address, auth)))
     });
