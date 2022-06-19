@@ -4,7 +4,7 @@ use http::Uri;
 use hyper::client::HttpConnector;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::upgrade::Upgraded;
-use hyper::{Body, Request, Response, Server};
+use hyper::{Body, Client, Request, Response, Server};
 use hyper_socks2::{Auth, SocksConnector};
 use log::debug;
 use std::convert::Infallible;
@@ -66,8 +66,20 @@ async fn main() -> Result<()> {
     };
     let auth = &*Box::leak(Box::new(auth));
     let addr = SocketAddr::from((args.listen_ip, port));
+    let mut connector = HttpConnector::new();
+    connector.enforce_http(false);
+    let proxy_addr = format!("socks://{socks_address}").parse::<Uri>()?;
+    let connector = SocksConnector {
+        auth: auth.clone(),
+        proxy_addr,
+        connector,
+    };
+    let client: Client<SocksConnector<HttpConnector>> = hyper::Client::builder().build(connector);
+    let client = &*Box::leak(Box::new(client));
     let make_service = make_service_fn(move |_| async move {
-        Ok::<_, Infallible>(service_fn(move |req| proxy(req, socks_address, auth)))
+        Ok::<_, Infallible>(service_fn(move |req| {
+            proxy(req, socks_address, auth, client)
+        }))
     });
     let server = Server::bind(&addr)
         .http1_preserve_header_case(true)
@@ -86,11 +98,8 @@ async fn proxy(
     req: Request<Body>,
     socks_address: SocketAddr,
     auth: &'static Option<Auth>,
+    client: &'static Client<SocksConnector<HttpConnector>>,
 ) -> Result<Response<Body>> {
-    let mut connector = HttpConnector::new();
-    connector.enforce_http(false);
-    let proxy_addr = Box::leak(Box::new(format!("socks://{}", socks_address)));
-    let proxy_addr = Uri::from_static(proxy_addr);
     if let Some(plain) = host_addr(req.uri()) {
         if req.method() == hyper::Method::CONNECT {
             tokio::task::spawn(async move {
@@ -105,13 +114,6 @@ async fn proxy(
             });
             Ok(Response::new(Body::empty()))
         } else {
-            let connector = SocksConnector {
-                // TODO: Can we remove this clone ?
-                auth: auth.clone(),
-                proxy_addr,
-                connector,
-            };
-            let client = hyper::Client::builder().build(connector);
             let response = client.request(req).await;
             Ok(response.expect("Cannot make HTTP request"))
         }
