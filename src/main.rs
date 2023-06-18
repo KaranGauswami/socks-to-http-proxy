@@ -1,6 +1,4 @@
-use clap::error::ErrorKind;
-use clap::CommandFactory;
-use clap::Parser;
+use clap::{Args, Parser};
 use color_eyre::eyre::Result;
 use http::Uri;
 use hyper::client::HttpConnector;
@@ -14,6 +12,18 @@ use std::net::{Ipv4Addr, SocketAddr};
 use tokio_socks::tcp::Socks5Stream;
 use tokio_socks::{IntoTargetAddr, ToProxyAddrs};
 
+#[derive(Debug, Args)]
+#[group()]
+struct Auths {
+    /// Socks5 username
+    #[arg(short = 'u', long, required = false)]
+    username: String,
+
+    /// Socks5 password
+    #[arg(short = 'P', long, required = false)]
+    password: String,
+}
+
 #[derive(Parser, Debug)]
 #[command(author, version, about,long_about=None)]
 struct Cli {
@@ -24,17 +34,12 @@ struct Cli {
     #[arg(long, default_value = "0.0.0.0")]
     listen_ip: Ipv4Addr,
 
+    #[command(flatten)]
+    auth: Option<Auths>,
+
     /// Socks5 proxy address
     #[arg(short, long, default_value = "127.0.0.1:1080")]
     socks_address: SocketAddr,
-
-    /// Socks5 username
-    #[arg(short = 'u', long)]
-    username: Option<String>,
-
-    /// Socks5 password
-    #[arg(short = 'P', long)]
-    password: Option<String>,
 
     /// Comma-separated list of allowed domains
     #[arg(long)]
@@ -50,27 +55,12 @@ async fn main() -> Result<()> {
     let socks_address = args.socks_address;
     let port = args.port;
 
-    let username = args.username;
-    let password = args.password;
-    let mut cmd = Cli::command();
-
-    let auth = match (username, password) {
-        (Some(username), Some(password)) => Some(Auth::new(username, password)),
-        (Some(_), None) => cmd
-            .error(
-                ErrorKind::MissingRequiredArgument,
-                "--password is required if --username is used",
-            )
-            .exit(),
-        (None, Some(_)) => cmd
-            .error(
-                ErrorKind::MissingRequiredArgument,
-                "--username is required if --password is used",
-            )
-            .exit(),
-        (None, None) => None,
+    let auth = match args.auth {
+        Some(auth) => Some(Auth::new(auth.username, auth.password)),
+        None => None,
     };
     let auth = &*Box::leak(Box::new(auth));
+
     let addr = SocketAddr::from((args.listen_ip, port));
     let mut connector = HttpConnector::new();
     connector.enforce_http(false);
