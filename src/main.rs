@@ -4,8 +4,9 @@ use crate::auth::Auth;
 use clap::{Args, Parser};
 use color_eyre::eyre::Result;
 
-use log::debug;
 use tokio_socks::tcp::Socks5Stream;
+use tracing::{debug, info, warn};
+use tracing_subscriber::EnvFilter;
 
 use std::net::{Ipv4Addr, SocketAddr};
 
@@ -55,7 +56,8 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::init();
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("sthp=debug"));
+    tracing_subscriber::fmt().with_env_filter(filter).init();
     color_eyre::install()?;
 
     let args = Cli::parse();
@@ -71,7 +73,7 @@ async fn main() -> Result<()> {
     let allowed_domains = &*Box::leak(Box::new(allowed_domains));
 
     let listener = TcpListener::bind(addr).await?;
-    println!("Listening on http://{}", addr);
+    info!("Listening on http://{}", addr);
 
     loop {
         let (stream, _) = listener.accept().await?;
@@ -86,7 +88,7 @@ async fn main() -> Result<()> {
                 .with_upgrades()
                 .await
             {
-                println!("Failed to serve connection: {:?}", err);
+                warn!("Failed to serve connection: {:?}", err);
             }
         });
     }
@@ -100,13 +102,11 @@ async fn proxy(
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
     let uri = req.uri();
     let method = req.method();
-    let headers = req.headers();
-    let req_str = format!("{} {} {:?}", method, uri, headers);
-    log::info!("Proxying request: {}", req_str);
+    debug!("Proxying request: {} {}", method, uri);
     if let (Some(allowed_domains), Some(request_domain)) = (allowed_domains, req.uri().host()) {
         let domain = request_domain.to_owned();
         if !allowed_domains.contains(&domain) {
-            eprintln!(
+            warn!(
                 "Access to domain {} is not allowed through the proxy.",
                 domain
             );
@@ -124,16 +124,16 @@ async fn proxy(
                 match hyper::upgrade::on(req).await {
                     Ok(upgraded) => {
                         if let Err(e) = tunnel(upgraded, addr, socks_addr, auth).await {
-                            eprintln!("server io error: {}", e);
+                            warn!("server io error: {}", e);
                         };
                     }
-                    Err(e) => eprintln!("upgrade error: {}", e),
+                    Err(e) => warn!("upgrade error: {}", e),
                 }
             });
 
             Ok(Response::new(empty()))
         } else {
-            eprintln!("CONNECT host is not socket addr: {:?}", req.uri());
+            warn!("CONNECT host is not socket addr: {:?}", req.uri());
             let mut resp = Response::new(full("CONNECT must be to a socket address"));
             *resp.status_mut() = http::StatusCode::BAD_REQUEST;
 
@@ -163,7 +163,7 @@ async fn proxy(
             .await?;
         tokio::task::spawn(async move {
             if let Err(err) = conn.await {
-                println!("Connection failed: {:?}", err);
+                warn!("Connection failed: {:?}", err);
             }
         });
 
