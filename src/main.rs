@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use clap::{Args, Parser};
 use color_eyre::eyre::Result;
 use http::Uri;
