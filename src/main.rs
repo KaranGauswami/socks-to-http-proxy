@@ -55,10 +55,9 @@ async fn main() -> Result<()> {
     let socks_address = args.socks_address;
     let port = args.port;
 
-    let auth = match args.auth {
-        Some(auth) => Some(Auth::new(auth.username, auth.password)),
-        None => None,
-    };
+    let auth = args
+        .auth
+        .map(|auth| Auth::new(auth.username, auth.password));
     let auth = &*Box::leak(Box::new(auth));
 
     let addr = SocketAddr::from((args.listen_ip, port));
@@ -72,10 +71,9 @@ async fn main() -> Result<()> {
     };
     let client: Client<SocksConnector<HttpConnector>> = hyper::Client::builder().build(connector);
     let client = &*Box::leak(Box::new(client));
-    let allowed_domains = match args.allowed_domains {
-        Some(domains) => Some(domains.split(',').map(|d| d.trim().to_owned()).collect()),
-        None => None,
-    };
+    let allowed_domains = args
+        .allowed_domains
+        .map(|domains| domains.split(',').map(|d| d.trim().to_owned()).collect());
     let allowed_domains = &*Box::leak(Box::new(allowed_domains));
     let make_service = make_service_fn(move |_| async move {
         Ok::<_, Infallible>(service_fn(move |req| {
