@@ -42,8 +42,8 @@ struct Cli {
     socks_address: SocketAddr,
 
     /// Comma-separated list of allowed domains
-    #[arg(long)]
-    allowed_domains: Option<String>,
+    #[arg(long, value_delimiter = ',')]
+    allowed_domains: Option<Vec<String>>,
 }
 
 #[tokio::main]
@@ -71,9 +71,7 @@ async fn main() -> Result<()> {
     };
     let client: Client<SocksConnector<HttpConnector>> = hyper::Client::builder().build(connector);
     let client = &*Box::leak(Box::new(client));
-    let allowed_domains = args
-        .allowed_domains
-        .map(|domains| domains.split(',').map(|d| d.trim().to_owned()).collect());
+    let allowed_domains = args.allowed_domains;
     let allowed_domains = &*Box::leak(Box::new(allowed_domains));
     let make_service = make_service_fn(move |_| async move {
         Ok::<_, Infallible>(service_fn(move |req| {
