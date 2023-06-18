@@ -1,4 +1,6 @@
-use clap::{ErrorKind, IntoApp, Parser};
+use clap::error::ErrorKind;
+use clap::CommandFactory;
+use clap::Parser;
 use color_eyre::eyre::Result;
 use http::Uri;
 use hyper::client::HttpConnector;
@@ -13,29 +15,29 @@ use tokio_socks::tcp::Socks5Stream;
 use tokio_socks::{IntoTargetAddr, ToProxyAddrs};
 
 #[derive(Parser, Debug)]
-#[clap(author, version, about,long_about=None)]
+#[command(author, version, about,long_about=None)]
 struct Cli {
     /// port where Http proxy should listen
-    #[clap(short, long, default_value = "8080",value_parser = clap::value_parser!(u16).range(1..))]
+    #[arg(short, long, default_value_t = 8080)]
     port: u16,
 
-    #[clap(long, default_value = "0.0.0.0")]
+    #[arg(long, default_value = "0.0.0.0")]
     listen_ip: Ipv4Addr,
 
     /// Socks5 proxy address
-    #[clap(short, long, default_value = "127.0.0.1:1080")]
+    #[arg(short, long, default_value = "127.0.0.1:1080")]
     socks_address: SocketAddr,
 
     /// Socks5 username
-    #[clap(short = 'u', long)]
+    #[arg(short = 'u', long)]
     username: Option<String>,
 
     /// Socks5 password
-    #[clap(short = 'P', long)]
+    #[arg(short = 'P', long)]
     password: Option<String>,
 
     /// Comma-separated list of allowed domains
-    #[clap(long)]
+    #[arg(long)]
     allowed_domains: Option<String>,
 }
 
@@ -56,13 +58,13 @@ async fn main() -> Result<()> {
         (Some(username), Some(password)) => Some(Auth::new(username, password)),
         (Some(_), None) => cmd
             .error(
-                ErrorKind::ArgumentNotFound,
+                ErrorKind::MissingRequiredArgument,
                 "--password is required if --username is used",
             )
             .exit(),
         (None, Some(_)) => cmd
             .error(
-                ErrorKind::ArgumentNotFound,
+                ErrorKind::MissingRequiredArgument,
                 "--username is required if --password is used",
             )
             .exit(),
@@ -119,9 +121,17 @@ async fn proxy(
     if let Some(plain) = host_addr(req.uri()) {
         if let Some(allowed_domains) = allowed_domains {
             let req_domain = req.uri().host().unwrap_or("").to_owned();
-            if !allowed_domains.iter().any(|domain| req_domain.ends_with(domain)) {
-                log::warn!("Access to domain {} is not allowed through the proxy.", req_domain);
-                let mut resp = Response::new(Body::from("Access to this domain is not allowed through the proxy."));
+            if !allowed_domains
+                .iter()
+                .any(|domain| req_domain.ends_with(domain))
+            {
+                log::warn!(
+                    "Access to domain {} is not allowed through the proxy.",
+                    req_domain
+                );
+                let mut resp = Response::new(Body::from(
+                    "Access to this domain is not allowed through the proxy.",
+                ));
                 *resp.status_mut() = http::StatusCode::FORBIDDEN;
                 return Ok(resp);
             }
