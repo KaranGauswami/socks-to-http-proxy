@@ -18,6 +18,7 @@ use hyper::service::service_fn;
 use hyper::upgrade::Upgraded;
 use hyper::{Method, Request, Response};
 
+use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
 #[derive(Debug, Args)]
@@ -77,6 +78,7 @@ async fn main() -> Result<()> {
 
     loop {
         let (stream, _) = listener.accept().await?;
+        let io = TokioIo::new(stream);
 
         let serve_connection = service_fn(move |req| proxy(req, socks_addr, auth, allowed_domains));
 
@@ -84,7 +86,7 @@ async fn main() -> Result<()> {
             if let Err(err) = http1::Builder::new()
                 .preserve_header_case(true)
                 .title_case_headers(true)
-                .serve_connection(stream, serve_connection)
+                .serve_connection(io, serve_connection)
                 .with_upgrades()
                 .await
             {
@@ -155,11 +157,12 @@ async fn proxy(
             .unwrap(),
             None => Socks5Stream::connect(socks_addr, addr).await.unwrap(),
         };
+        let io = TokioIo::new(stream);
 
         let (mut sender, conn) = Builder::new()
             .preserve_header_case(true)
             .title_case_headers(true)
-            .handshake(stream)
+            .handshake(io)
             .await?;
         tokio::task::spawn(async move {
             if let Err(err) = conn.await {
@@ -189,7 +192,7 @@ fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
 }
 
 async fn tunnel(
-    mut upgraded: Upgraded,
+    upgraded: Upgraded,
     addr: String,
     socks_addr: SocketAddr,
     auth: &Option<Auth>,
@@ -201,6 +204,8 @@ async fn tunnel(
         }
         None => Socks5Stream::connect(socks_addr, addr).await?,
     };
+
+    let mut upgraded = TokioIo::new(upgraded);
 
     // Proxying data
     let (from_client, from_server) =
