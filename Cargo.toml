@@ -22,4 +22,3 @@ http-body-util = "0.1.0-rc.2"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 hyper-util = { git = "https://github.com/hyperium/hyper-util.git", rev = "229757e565e0935a7a3b1d0f9e9ab88d9310e779" }
-base64 = "0.22.1"
