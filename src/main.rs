@@ -112,7 +112,6 @@ async fn proxy(
     http_basic: &Option<String>,
     allowed_domains: &Option<Vec<String>>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
-    let uri = req.uri();
     let mut http_authed = false;
     let hm = req.headers();
 
@@ -147,7 +146,7 @@ async fn proxy(
     }
 
     let method = req.method();
-    debug!("Proxying request: {} {}", method, uri);
+    debug!("Proxying request: {} {}", method, req.uri());
     if let (Some(allowed_domains), Some(request_domain)) = (allowed_domains, req.uri().host()) {
         let domain = request_domain.to_owned();
         if !allowed_domains.contains(&domain) {
