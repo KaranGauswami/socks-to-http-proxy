@@ -40,7 +40,7 @@ async fn proxy(
             let mut resp = Response::new(full(
                 "Access to this domain is not allowed through the proxy.",
             ));
-            *resp.status_mut() = http::StatusCode::FORBIDDEN;
+            *resp.status_mut() = hyper::StatusCode::FORBIDDEN;
             return Ok(resp);
         }
     }
@@ -62,7 +62,7 @@ async fn proxy(
         } else {
             warn!("CONNECT host is not socket addr: {:?}", req.uri());
             let mut resp = Response::new(full("CONNECT must be to a socket address"));
-            *resp.status_mut() = http::StatusCode::BAD_REQUEST;
+            *resp.status_mut() = hyper::StatusCode::BAD_REQUEST;
 
             Ok(resp)
         }
@@ -100,7 +100,7 @@ async fn proxy(
     }
 }
 
-fn host_addr(uri: &http::Uri) -> Option<String> {
+fn host_addr(uri: &hyper::Uri) -> Option<String> {
     uri.authority().map(|auth| auth.to_string())
 }
 
