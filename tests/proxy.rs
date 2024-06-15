@@ -43,8 +43,7 @@ async fn simple_test() -> Result<()> {
 
     let client = reqwest::Client::builder()
         .proxy(reqwest::Proxy::http(format!(
-            "http://{}:{}",
-            addr.ip(),
+            "http://localhost:{}",
             addr.port()
         ))?)
         .build()?;
