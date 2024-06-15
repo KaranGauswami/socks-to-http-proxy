@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, time::Duration};
+use std::net::SocketAddr;
 
 use http::StatusCode;
 use sthp::proxy_request;
@@ -9,11 +9,13 @@ use socksprox::Socks5Server;
 use tokio::task::JoinHandle;
 
 async fn start_socks_server() -> Result<(JoinHandle<()>, SocketAddr)> {
-    // TODO: currently Socks5Server doesnt return what port it binded
-    // so we will use TcpListener to get the random port and release it immediatly
+    // TODO: Currently, Socks5Server does not return the port it is bound to.
+    // To work around this, we will use TcpListener to obtain a random available port.
+    // After retrieving the port, we will immediately release it.
     let listener = TcpListener::bind("localhost:0").await?;
     let addr = listener.local_addr()?;
     let port = addr.port();
+    eprintln!("socks proxy will listen on port {}", port);
     // release port
     drop(listener);
 
@@ -37,7 +39,7 @@ async fn simple_test() -> Result<()> {
         eprintln!("new connection from: {:?}", proxy_addr);
         Ok::<_, color_eyre::eyre::Error>(())
     });
-    assert_eq!("hello", "hello");
+    eprintln!("http proxy will listen on {}", addr);
 
     let client = reqwest::Client::builder()
         .proxy(reqwest::Proxy::http(format!(
@@ -51,6 +53,5 @@ async fn simple_test() -> Result<()> {
         client.get("http://example.org").send().await?.status(),
         StatusCode::OK
     );
-    eprintln!("http proxy handle dropped");
     Ok(())
 }
