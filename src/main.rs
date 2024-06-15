@@ -3,7 +3,7 @@ use color_eyre::eyre::Result;
 
 use sthp::proxy::auth::Auth;
 use sthp::proxy_request;
-use tracing::info;
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 use std::net::{Ipv4Addr, SocketAddr};
@@ -68,7 +68,9 @@ async fn main() -> Result<()> {
     loop {
         let (stream, _) = listener.accept().await?;
         tokio::task::spawn(async move {
-            proxy_request(stream, socks_addr, auth_details, allowed_domains).await
+            if let Err(e) = proxy_request(stream, socks_addr, auth_details, allowed_domains).await {
+                error!("Error proxying request: {}", e);
+            }
         });
     }
 }

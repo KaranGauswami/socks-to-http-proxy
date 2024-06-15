@@ -26,7 +26,7 @@ async fn proxy(
     socks_addr: SocketAddr,
     auth: &'static Option<Auth>,
     allowed_domains: &Option<Vec<String>>,
-) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
+) -> Result<Response<BoxBody<Bytes, hyper::Error>>> {
     let uri = req.uri();
     let method = req.method();
     debug!("Proxying request: {} {}", method, uri);
@@ -80,7 +80,7 @@ async fn proxy(
             )
             .await
             .unwrap(),
-            None => Socks5Stream::connect(socks_addr, addr).await.unwrap(),
+            None => Socks5Stream::connect(socks_addr, addr).await?,
         };
         let io = TokioIo::new(stream);
 
@@ -149,7 +149,7 @@ pub async fn proxy_request(
     socks_addr: SocketAddr,
     auth_details: &'static Option<Auth>,
     allowed_domains: &'static Option<Vec<String>>,
-) {
+) -> color_eyre::Result<()> {
     let io = TokioIo::new(stream);
 
     let serve_connection =
@@ -166,4 +166,5 @@ pub async fn proxy_request(
             warn!("Failed to serve connection: {:?}", err);
         }
     });
+    Ok(())
 }
