@@ -58,8 +58,12 @@ struct Cli {
     allowed_domains: Option<Vec<String>>,
 
     /// HTTP Basic Auth credentials in the format "user:passwd"
-    #[arg(long, default_value = "")]
+    #[arg(long)]
     http_basic: Option<String>,
+
+    /// Disable HTTP authentication [default: true]
+    #[arg(long, default_value_t = true)]
+    no_httpauth: bool,
 }
 
 #[tokio::main]
@@ -81,6 +85,7 @@ async fn main() -> Result<()> {
     let allowed_domains = &*Box::leak(Box::new(allowed_domains));
     let http_basic = args.http_basic.map(|hb| format!("Basic {}", general_purpose::STANDARD.encode(hb)));
     let http_basic = &*Box::leak(Box::new(http_basic));
+    let no_httpauth = args.no_httpauth;
 
     let listener = TcpListener::bind(addr).await?;
     info!("Listening on http://{}", addr);
@@ -89,7 +94,7 @@ async fn main() -> Result<()> {
         let (stream, _) = listener.accept().await?;
         let io = TokioIo::new(stream);
 
-        let serve_connection = service_fn(move |req| proxy(req, socks_addr, auth, &http_basic, allowed_domains));
+        let serve_connection = service_fn(move |req| proxy(req, socks_addr, auth, &http_basic, allowed_domains, no_httpauth));
 
         tokio::task::spawn(async move {
             if let Err(err) = http1::Builder::new()
@@ -111,11 +116,14 @@ async fn proxy(
     auth: &'static Option<Auth>,
     http_basic: &Option<String>,
     allowed_domains: &Option<Vec<String>>,
+    no_httpauth: bool,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
     let mut http_authed = false;
     let hm = req.headers();
 
-    if hm.contains_key("proxy-authorization") {
+    if no_httpauth {
+        http_authed = true;
+    } else if hm.contains_key("proxy-authorization") {
         let config_auth = match http_basic {
             Some(value) => value.clone(),
             None => String::new(),
