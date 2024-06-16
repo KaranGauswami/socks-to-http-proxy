@@ -40,7 +40,7 @@ Options:
   -u, --username <USERNAME>                Socks5 username
   -P, --password <PASSWORD>                Socks5 password
       --http-basic <USER:PASSWD>           HTTP Basic Auth
-      --no-httpauth <true/false>           ignore HTTP Basic Auth, [default: true]
+      --no-httpauth <1/0>                  Ignore HTTP Basic Auth, [default: 1]
   -s, --socks-address <SOCKS_ADDRESS>      Socks5 proxy address [default: 127.0.0.1:1080]
       --allowed-domains <ALLOWED_DOMAINS>  Comma-separated list of allowed domains
   -h, --help                               Print help information

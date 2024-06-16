@@ -1,7 +1,7 @@
 mod auth;
 
 use crate::auth::Auth;
-use clap::{Args, Parser};
+use clap::{Args, Parser, value_parser};
 use color_eyre::eyre::Result;
 
 use tokio_socks::tcp::Socks5Stream;
@@ -61,9 +61,9 @@ struct Cli {
     #[arg(long)]
     http_basic: Option<String>,
 
-    /// Disable HTTP authentication [default: true]
-    #[arg(long, default_value_t = true)]
-    no_httpauth: bool,
+    /// Disable HTTP authentication [default: 1]
+    #[arg(long, value_parser = value_parser ! (u8).range(0..=1), default_value_t = 1)]
+    no_httpauth: u8,
 }
 
 #[tokio::main]
@@ -85,7 +85,7 @@ async fn main() -> Result<()> {
     let allowed_domains = &*Box::leak(Box::new(allowed_domains));
     let http_basic = args.http_basic.map(|hb| format!("Basic {}", general_purpose::STANDARD.encode(hb)));
     let http_basic = &*Box::leak(Box::new(http_basic));
-    let no_httpauth = args.no_httpauth;
+    let no_httpauth = args.no_httpauth == 1;
 
     let listener = TcpListener::bind(addr).await?;
     info!("Listening on http://{}", addr);
