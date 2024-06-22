@@ -68,7 +68,14 @@ async fn main() -> Result<()> {
     loop {
         let (stream, _) = listener.accept().await?;
         tokio::task::spawn(async move {
-            if let Err(e) = proxy_request(stream, socks_addr, auth_details, allowed_domains).await {
+            if let Err(e) = proxy_request(
+                stream,
+                socks_addr,
+                auth_details.as_ref(),
+                allowed_domains.as_ref(),
+            )
+            .await
+            {
                 error!("Error proxying request: {}", e);
             }
         });

@@ -24,8 +24,8 @@ use hyper::server::conn::http1;
 async fn proxy(
     req: Request<hyper::body::Incoming>,
     socks_addr: SocketAddr,
-    auth: &'static Option<Auth>,
-    allowed_domains: &Option<Vec<String>>,
+    auth: Option<&'static Auth>,
+    allowed_domains: Option<&'static Vec<String>>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>> {
     let uri = req.uri();
     let method = req.method();
@@ -120,7 +120,7 @@ async fn tunnel(
     upgraded: Upgraded,
     addr: String,
     socks_addr: SocketAddr,
-    auth: &Option<Auth>,
+    auth: Option<&Auth>,
 ) -> Result<()> {
     let mut stream = match auth {
         Some(auth) => {
@@ -147,8 +147,8 @@ async fn tunnel(
 pub async fn proxy_request(
     stream: TcpStream,
     socks_addr: SocketAddr,
-    auth_details: &'static Option<Auth>,
-    allowed_domains: &'static Option<Vec<String>>,
+    auth_details: Option<&'static Auth>,
+    allowed_domains: Option<&'static Vec<String>>,
 ) -> color_eyre::Result<()> {
     let io = TokioIo::new(stream);
 

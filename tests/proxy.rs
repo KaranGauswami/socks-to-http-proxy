@@ -35,7 +35,7 @@ async fn simple_test() -> Result<()> {
     let addr = listener.local_addr()?;
     let _ = tokio::task::spawn(async move {
         let (stream, proxy_addr) = listener.accept().await?;
-        proxy_request(stream, socks_proxy_addr, &None, &None).await?;
+        proxy_request(stream, socks_proxy_addr, None, None).await?;
         eprintln!("new connection from: {:?}", proxy_addr);
         Ok::<_, color_eyre::eyre::Error>(())
     });
