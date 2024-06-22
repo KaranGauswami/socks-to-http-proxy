@@ -3,6 +3,7 @@ use color_eyre::eyre::Result;
 
 pub mod auth;
 
+use hyper::header::{HeaderValue, PROXY_AUTHENTICATE};
 use hyper::service::service_fn;
 use tokio::net::TcpStream;
 use tokio_socks::tcp::Socks5Stream;
@@ -23,10 +24,42 @@ use hyper::server::conn::http1;
 
 async fn proxy(
     req: Request<hyper::body::Incoming>,
+    client_addr: SocketAddr,
     socks_addr: SocketAddr,
     auth: Option<&'static Auth>,
     allowed_domains: Option<&'static Vec<String>>,
+    basic_http_header: Option<&HeaderValue>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>> {
+    let mut authenticated = false;
+    let hm = req.headers();
+
+    if let Some(basic_http_header) = basic_http_header {
+        let Some(http_auth) = hm.get("proxy-authorization") else {
+            // When the request does not contain a Proxy-Authorization header,
+            // send a 407 response code and a Proxy-Authenticate header
+            let mut response = Response::new(full("Proxy Authentication Required"));
+            *response.status_mut() = hyper::StatusCode::PROXY_AUTHENTICATION_REQUIRED;
+            response.headers_mut().insert(
+                PROXY_AUTHENTICATE,
+                HeaderValue::from_static("Basic realm=\"proxy\""),
+            );
+            return Ok(response);
+        };
+        if http_auth == basic_http_header {
+            authenticated = true;
+        }
+    } else {
+        authenticated = true;
+    }
+
+    if !authenticated {
+        warn!("Failed auth attempt from: {}", client_addr);
+        // http response code reference taken from tinyproxy
+        let mut resp = Response::new(full("Unauthorized"));
+        *resp.status_mut() = hyper::StatusCode::UNAUTHORIZED;
+        return Ok(resp);
+    }
+
     let uri = req.uri();
     let method = req.method();
     debug!("Proxying request: {} {}", method, uri);
@@ -146,14 +179,24 @@ async fn tunnel(
 
 pub async fn proxy_request(
     stream: TcpStream,
+    client_addr: SocketAddr,
     socks_addr: SocketAddr,
     auth_details: Option<&'static Auth>,
     allowed_domains: Option<&'static Vec<String>>,
+    basic_http_header: Option<&'static HeaderValue>,
 ) -> color_eyre::Result<()> {
     let io = TokioIo::new(stream);
 
-    let serve_connection =
-        service_fn(move |req| proxy(req, socks_addr, auth_details, allowed_domains));
+    let serve_connection = service_fn(move |req| {
+        proxy(
+            req,
+            client_addr,
+            socks_addr,
+            auth_details,
+            allowed_domains,
+            basic_http_header,
+        )
+    });
 
     tokio::task::spawn(async move {
         if let Err(err) = http1::Builder::new()

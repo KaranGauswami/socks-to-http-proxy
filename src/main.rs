@@ -8,6 +8,9 @@ use tracing_subscriber::EnvFilter;
 
 use std::net::{Ipv4Addr, SocketAddr};
 
+use base64::engine::general_purpose;
+use base64::Engine;
+use hyper::header::HeaderValue;
 use tokio::net::TcpListener;
 
 #[derive(Debug, Args)]
@@ -42,6 +45,10 @@ struct Cli {
     /// Comma-separated list of allowed domains
     #[arg(long, value_delimiter = ',')]
     allowed_domains: Option<Vec<String>>,
+
+    /// HTTP Basic Auth credentials in the format "user:passwd"
+    #[arg(long)]
+    http_basic: Option<String>,
 }
 
 #[tokio::main]
@@ -61,18 +68,26 @@ async fn main() -> Result<()> {
     let addr = SocketAddr::from((args.listen_ip, port));
     let allowed_domains = args.allowed_domains;
     let allowed_domains = &*Box::leak(Box::new(allowed_domains));
+    let http_basic = args
+        .http_basic
+        .map(|hb| format!("Basic {}", general_purpose::STANDARD.encode(hb)))
+        .map(|hb| HeaderValue::from_str(&hb))
+        .transpose()?;
+    let http_basic = &*Box::leak(Box::new(http_basic));
 
     let listener = TcpListener::bind(addr).await?;
     info!("Listening on http://{}", addr);
 
     loop {
-        let (stream, _) = listener.accept().await?;
+        let (stream, client_addr) = listener.accept().await?;
         tokio::task::spawn(async move {
             if let Err(e) = proxy_request(
                 stream,
+                client_addr,
                 socks_addr,
                 auth_details.as_ref(),
                 allowed_domains.as_ref(),
+                http_basic.as_ref(),
             )
             .await
             {
