@@ -36,6 +36,9 @@ This will create proxy server on 8080 and use example:1080 as a Socks5 Proxy
 > [!NOTE]  
 > The --socks-address (-s) flag does not support adding a schema at the start (e.g., socks:// or socks5h://). Currently, it only supports socks5h, which means DNS resolution will be done on the SOCKS server.
 
+> [!WARN]
+> After v5, Changed default listening IP from `0.0.0.0` to `127.0.0.1`. This change restricts the application access to the local machine only.
+
 ### Options
 
 There are a few options for using `sthp`.
