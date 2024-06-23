@@ -28,7 +28,7 @@ struct AuthParams {
 fn socket_addr(s: &str) -> Result<SocketAddr> {
     let mut address = s.to_socket_addrs()?;
     let address = address.next();
-    Ok(address.ok_or_eyre(format!("no IP address found for the hostname"))?)
+    address.ok_or_eyre("no IP address found for the hostname".to_string())
 }
 
 #[derive(Parser, Debug)]
