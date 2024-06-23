@@ -6,7 +6,7 @@ use sthp::proxy_request;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
-use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs};
+use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -39,7 +39,7 @@ struct Cli {
     port: u16,
 
     #[arg(long, default_value = "0.0.0.0")]
-    listen_ip: Ipv4Addr,
+    listen_ip: IpAddr,
 
     #[command(flatten)]
     auth: Option<AuthParams>,
