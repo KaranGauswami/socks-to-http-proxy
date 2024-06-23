@@ -27,6 +27,15 @@ sthp -p 8080 -s 127.0.0.1:1080
 
 This will create proxy server on 8080 and use localhost:1080 as a Socks5 Proxy
 
+```bash
+sthp -p 8080 -s example.com:8080
+```
+
+This will create proxy server on 8080 and use example:1080 as a Socks5 Proxy
+
+> [!NOTE]  
+> The --socks-address (-s) flag does not support adding a schema at the start (e.g., socks:// or socks5h://). Currently, it only supports socks5h, which means DNS resolution will be done on the SOCKS server.
+
 ### Options
 
 There are a few options for using `sthp`.

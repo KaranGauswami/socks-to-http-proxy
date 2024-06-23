@@ -1,32 +1,21 @@
-mod auth;
-
-use crate::auth::Auth;
 use clap::{Args, Parser};
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{OptionExt, Result};
 
-use tokio_socks::tcp::Socks5Stream;
-use tracing::{debug, info, warn};
+use sthp::proxy::auth::Auth;
+use sthp::proxy_request;
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs};
 
 use base64::engine::general_purpose;
 use base64::Engine;
-use bytes::Bytes;
-use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
-use hyper::client::conn::http1::Builder;
-use hyper::header::{HeaderValue, PROXY_AUTHENTICATE};
-use hyper::server::conn::http1;
-use hyper::service::service_fn;
-use hyper::upgrade::Upgraded;
-use hyper::{Method, Request, Response};
-
-use hyper_util::rt::TokioIo;
+use hyper::header::HeaderValue;
 use tokio::net::TcpListener;
 
 #[derive(Debug, Args)]
 #[group()]
-struct Auths {
+struct AuthParams {
     /// Socks5 username
     #[arg(short = 'u', long, required = false)]
     username: String,
@@ -34,6 +23,12 @@ struct Auths {
     /// Socks5 password
     #[arg(short = 'P', long, required = false)]
     password: String,
+}
+
+fn socket_addr(s: &str) -> Result<SocketAddr> {
+    let mut address = s.to_socket_addrs()?;
+    let address = address.next();
+    address.ok_or_eyre("no IP address found for the hostname".to_string())
 }
 
 #[derive(Parser, Debug)]
@@ -47,10 +42,10 @@ struct Cli {
     listen_ip: Ipv4Addr,
 
     #[command(flatten)]
-    auth: Option<Auths>,
+    auth: Option<AuthParams>,
 
     /// Socks5 proxy address
-    #[arg(short, long, default_value = "127.0.0.1:1080")]
+    #[arg(short, long, default_value = "127.0.0.1:1080", value_parser=socket_addr)]
     socks_address: SocketAddr,
 
     /// Comma-separated list of allowed domains
@@ -72,10 +67,10 @@ async fn main() -> Result<()> {
 
     let socks_addr = args.socks_address;
     let port = args.port;
-    let auth = args
+    let auth_details = args
         .auth
         .map(|auth| Auth::new(auth.username, auth.password));
-    let auth = &*Box::leak(Box::new(auth));
+    let auth_details = &*Box::leak(Box::new(auth_details));
     let addr = SocketAddr::from((args.listen_ip, port));
     let allowed_domains = args.allowed_domains;
     let allowed_domains = &*Box::leak(Box::new(allowed_domains));
@@ -91,183 +86,19 @@ async fn main() -> Result<()> {
 
     loop {
         let (stream, client_addr) = listener.accept().await?;
-        let io = TokioIo::new(stream);
-
-        let serve_connection = service_fn(move |req| {
-            proxy(
-                req,
+        tokio::task::spawn(async move {
+            if let Err(e) = proxy_request(
+                stream,
                 client_addr,
                 socks_addr,
-                auth,
-                http_basic,
-                allowed_domains,
-            )
-        });
-
-        tokio::task::spawn(async move {
-            if let Err(err) = http1::Builder::new()
-                .preserve_header_case(true)
-                .title_case_headers(true)
-                .serve_connection(io, serve_connection)
-                .with_upgrades()
-                .await
-            {
-                warn!("Failed to serve connection: {:?}", err);
-            }
-        });
-    }
-}
-
-async fn proxy(
-    req: Request<hyper::body::Incoming>,
-    client_addr: SocketAddr,
-    socks_addr: SocketAddr,
-    auth: &'static Option<Auth>,
-    basic_http_header: &Option<HeaderValue>,
-    allowed_domains: &Option<Vec<String>>,
-) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
-    let mut authenticated = false;
-    let hm = req.headers();
-
-    if let Some(basic_http_header) = basic_http_header {
-        let Some(http_auth) = hm.get("proxy-authorization") else {
-            // When the request does not contain a Proxy-Authorization header,
-            // send a 407 response code and a Proxy-Authenticate header
-            let mut response = Response::new(full("Proxy Authentication Required"));
-            *response.status_mut() = http::StatusCode::PROXY_AUTHENTICATION_REQUIRED;
-            response.headers_mut().insert(
-                PROXY_AUTHENTICATE,
-                HeaderValue::from_static("Basic realm=\"proxy\""),
-            );
-            return Ok(response);
-        };
-        if http_auth == basic_http_header {
-            authenticated = true;
-        }
-    } else {
-        authenticated = true;
-    }
-
-    if !authenticated {
-        warn!("Failed auth attempt from: {}", client_addr);
-        // http response code reference taken from tinyproxy
-        let mut resp = Response::new(full("Unauthorized"));
-        *resp.status_mut() = http::StatusCode::UNAUTHORIZED;
-        return Ok(resp);
-    }
-
-    let method = req.method();
-    debug!("Proxying request: {} {}", method, req.uri());
-    if let (Some(allowed_domains), Some(request_domain)) = (allowed_domains, req.uri().host()) {
-        let domain = request_domain.to_owned();
-        if !allowed_domains.contains(&domain) {
-            warn!(
-                "Access to domain {} is not allowed through the proxy.",
-                domain
-            );
-            let mut resp = Response::new(full(
-                "Access to this domain is not allowed through the proxy.",
-            ));
-            *resp.status_mut() = http::StatusCode::FORBIDDEN;
-            return Ok(resp);
-        }
-    }
-
-    if Method::CONNECT == req.method() {
-        if let Some(addr) = host_addr(req.uri()) {
-            tokio::task::spawn(async move {
-                match hyper::upgrade::on(req).await {
-                    Ok(upgraded) => {
-                        if let Err(e) = tunnel(upgraded, addr, socks_addr, auth).await {
-                            warn!("server io error: {}", e);
-                        };
-                    }
-                    Err(e) => warn!("upgrade error: {}", e),
-                }
-            });
-
-            Ok(Response::new(empty()))
-        } else {
-            warn!("CONNECT host is not socket addr: {:?}", req.uri());
-            let mut resp = Response::new(full("CONNECT must be to a socket address"));
-            *resp.status_mut() = http::StatusCode::BAD_REQUEST;
-
-            Ok(resp)
-        }
-    } else {
-        let host = req.uri().host().expect("uri has no host");
-        let port = req.uri().port_u16().unwrap_or(80);
-        let addr = (host, port);
-
-        let stream = match auth {
-            Some(auth) => Socks5Stream::connect_with_password(
-                socks_addr,
-                addr,
-                &auth.username,
-                &auth.password,
+                auth_details.as_ref(),
+                allowed_domains.as_ref(),
+                http_basic.as_ref(),
             )
             .await
-            .unwrap(),
-            None => Socks5Stream::connect(socks_addr, addr).await.unwrap(),
-        };
-        let io = TokioIo::new(stream);
-
-        let (mut sender, conn) = Builder::new()
-            .preserve_header_case(true)
-            .title_case_headers(true)
-            .handshake(io)
-            .await?;
-        tokio::task::spawn(async move {
-            if let Err(err) = conn.await {
-                warn!("Connection failed: {:?}", err);
+            {
+                error!("Error proxying request: {}", e);
             }
         });
-
-        let resp = sender.send_request(req).await?;
-        Ok(resp.map(|b| b.boxed()))
     }
-}
-
-fn host_addr(uri: &http::Uri) -> Option<String> {
-    uri.authority().map(|auth| auth.to_string())
-}
-
-fn empty() -> BoxBody<Bytes, hyper::Error> {
-    Empty::<Bytes>::new()
-        .map_err(|never| match never {})
-        .boxed()
-}
-
-fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
-    Full::new(chunk.into())
-        .map_err(|never| match never {})
-        .boxed()
-}
-
-async fn tunnel(
-    upgraded: Upgraded,
-    addr: String,
-    socks_addr: SocketAddr,
-    auth: &Option<Auth>,
-) -> Result<()> {
-    let mut stream = match auth {
-        Some(auth) => {
-            Socks5Stream::connect_with_password(socks_addr, addr, &auth.username, &auth.password)
-                .await?
-        }
-        None => Socks5Stream::connect(socks_addr, addr).await?,
-    };
-
-    let mut upgraded = TokioIo::new(upgraded);
-
-    // Proxying data
-    let (from_client, from_server) =
-        tokio::io::copy_bidirectional(&mut upgraded, &mut stream).await?;
-
-    // Print message when done
-    debug!(
-        "client wrote {} bytes and received {} bytes",
-        from_client, from_server
-    );
-    Ok(())
 }
