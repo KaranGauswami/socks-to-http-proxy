@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use http::StatusCode;
+use hyper::StatusCode;
 use sthp::proxy_request;
 use tokio::net::TcpListener;
 
