@@ -45,12 +45,12 @@ Usage: sthp [OPTIONS]
 
 Options:
   -p, --port <PORT>                        port where Http proxy should listen [default: 8080]
-      --listen-ip <LISTEN_IP>              [default: 0.0.0.0]
+      --listen-ip <LISTEN_IP>              [default: 127.0.0.1]
   -u, --username <USERNAME>                Socks5 username
   -P, --password <PASSWORD>                Socks5 password
-      --http-basic <USER:PASSWD>           HTTP Basic Auth
   -s, --socks-address <SOCKS_ADDRESS>      Socks5 proxy address [default: 127.0.0.1:1080]
       --allowed-domains <ALLOWED_DOMAINS>  Comma-separated list of allowed domains
+      --http-basic <HTTP_BASIC>            HTTP Basic Auth credentials in the format "user:passwd"
   -h, --help                               Print help information
   -V, --version                            Print version information
 ```

@@ -38,7 +38,7 @@ struct Cli {
     #[arg(short, long, default_value_t = 8080)]
     port: u16,
 
-    #[arg(long, default_value = "0.0.0.0")]
+    #[arg(long, default_value = "127.0.0.1")]
     listen_ip: IpAddr,
 
     #[command(flatten)]
