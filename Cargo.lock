@@ -1251,7 +1251,7 @@ checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
 name = "sthp"
-version = "0.5.0-alpha1"
+version = "0.5.0-alpha2"
 dependencies = [
  "base64",
  "bytes",
