@@ -1,12 +1,12 @@
 use clap::{Args, Parser};
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{OptionExt, Result};
 
 use sthp::proxy::auth::Auth;
 use sthp::proxy_request;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs};
 
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -25,6 +25,12 @@ struct AuthParams {
     password: String,
 }
 
+fn socket_addr(s: &str) -> Result<SocketAddr> {
+    let mut address = s.to_socket_addrs()?;
+    let address = address.next();
+    Ok(address.ok_or_eyre(format!("no IP address found for the hostname"))?)
+}
+
 #[derive(Parser, Debug)]
 #[command(author, version, about,long_about=None)]
 struct Cli {
@@ -39,7 +45,7 @@ struct Cli {
     auth: Option<AuthParams>,
 
     /// Socks5 proxy address
-    #[arg(short, long, default_value = "127.0.0.1:1080")]
+    #[arg(short, long, default_value = "127.0.0.1:1080", value_parser=socket_addr)]
     socks_address: SocketAddr,
 
     /// Comma-separated list of allowed domains
