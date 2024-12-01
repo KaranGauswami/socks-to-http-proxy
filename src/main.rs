@@ -10,6 +10,7 @@ use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 
 use base64::engine::general_purpose;
 use base64::Engine;
+use daemonize::Daemonize;
 use hyper::header::HeaderValue;
 use tokio::net::TcpListener;
 
@@ -55,6 +56,10 @@ struct Cli {
     /// HTTP Basic Auth credentials in the format "user:passwd"
     #[arg(long)]
     http_basic: Option<String>,
+
+    /// Run process in background
+    #[arg(short, long, default_value_t = false)]
+    detached: bool,
 }
 
 #[tokio::main]
@@ -82,6 +87,14 @@ async fn main() -> Result<()> {
     let http_basic = &*Box::leak(Box::new(http_basic));
 
     let listener = TcpListener::bind(addr).await?;
+
+    let daemonize = Daemonize::new();
+    if args.detached {
+        if let Err(e) = daemonize.start() {
+            eprintln!("Error: {}", e);
+        }
+    }
+
     info!("Listening on http://{}", addr);
 
     loop {
