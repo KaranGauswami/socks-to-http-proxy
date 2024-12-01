@@ -1,6 +1,6 @@
 [package]
 name = "sthp"
-version = "0.5.0-alpha2"
+version = "0.5.0-beta1"
 license = "MIT"
 authors = ["Karan Gauswami <karangauswami.dev@gmail.com>"]
 edition = "2021"
