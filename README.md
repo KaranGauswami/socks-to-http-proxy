@@ -54,6 +54,7 @@ Options:
   -s, --socks-address <SOCKS_ADDRESS>      Socks5 proxy address [default: 127.0.0.1:1080]
       --allowed-domains <ALLOWED_DOMAINS>  Comma-separated list of allowed domains
       --http-basic <HTTP_BASIC>            HTTP Basic Auth credentials in the format "user:passwd"
-  -h, --help                               Print help information
-  -V, --version                            Print version information
+  -d, --detached                           Run process in background ( Only for Unix based systems)
+  -h, --help                               Print help
+  -V, --version                            Print version
 ```
