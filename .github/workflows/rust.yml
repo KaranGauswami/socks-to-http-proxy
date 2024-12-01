@@ -15,7 +15,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [linux, windows, macos]
+        os: [linux-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
       - name: Run tests
