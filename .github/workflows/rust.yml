@@ -11,11 +11,11 @@ env:
 
 jobs:
   build:
+    name: Publish for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         name: [linux, windows, macos]
-
     steps:
       - uses: actions/checkout@v4
       - name: Run tests
