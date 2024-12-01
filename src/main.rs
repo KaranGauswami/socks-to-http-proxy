@@ -10,7 +10,6 @@ use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 
 use base64::engine::general_purpose;
 use base64::Engine;
-use daemonize::Daemonize;
 use hyper::header::HeaderValue;
 use tokio::net::TcpListener;
 
@@ -57,6 +56,7 @@ struct Cli {
     #[arg(long)]
     http_basic: Option<String>,
 
+    #[cfg(not(target_os = "windows"))]
     /// Run process in background
     #[arg(short, long, default_value_t = false)]
     detached: bool,
@@ -88,10 +88,13 @@ async fn main() -> Result<()> {
 
     let listener = TcpListener::bind(addr).await?;
 
-    let daemonize = Daemonize::new();
-    if args.detached {
-        if let Err(e) = daemonize.start() {
-            eprintln!("Error: {}", e);
+    #[cfg(not(target_os = "windows"))]
+    {
+        if args.detached {
+            let daemonize = daemonize::Daemonize::new();
+            if let Err(e) = daemonize.start() {
+                eprintln!("Error: {}", e);
+            }
         }
     }
 
