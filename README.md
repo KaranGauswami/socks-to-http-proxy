@@ -58,3 +58,12 @@ Options:
   -h, --help                               Print help
   -V, --version                            Print version
 ```
+
+## 💖 Sponsors
+
+<a href="https://iproyal.sjv.io/MA3XBK">
+  <img src="https://karan-sponser-public-assets.s3.ap-south-1.amazonaws.com/assets/IPRoyal/Banners/IPR_766x102.png" alt="IPRoyal"/>
+</a>
+</br>
+
+Shout-out to **[IPRoyal](https://iproyal.sjv.io/MA3XBK)** for powering this repo! If you need solid residential & mobile proxies, they’re worth a look.
