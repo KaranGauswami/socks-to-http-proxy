@@ -62,13 +62,30 @@ struct Cli {
     detached: bool,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() {
+    let args = Cli::parse();
+    #[cfg(not(target_os = "windows"))]
+    {
+        if args.detached {
+            let daemonize = daemonize::Daemonize::new();
+            if let Err(e) = daemonize.start() {
+                eprintln!("Error: {}", e);
+            }
+        }
+    }
+
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to build tokio runtime")
+        .block_on(main_entry(args))
+        .expect("Failed to run program")
+}
+
+async fn main_entry(args: Cli) -> Result<()> {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("sthp=debug"));
     tracing_subscriber::fmt().with_env_filter(filter).init();
     color_eyre::install()?;
-
-    let args = Cli::parse();
 
     let socks_addr = args.socks_address;
     let port = args.port;
@@ -87,16 +104,6 @@ async fn main() -> Result<()> {
     let http_basic = &*Box::leak(Box::new(http_basic));
 
     let listener = TcpListener::bind(addr).await?;
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        if args.detached {
-            let daemonize = daemonize::Daemonize::new();
-            if let Err(e) = daemonize.start() {
-                eprintln!("Error: {}", e);
-            }
-        }
-    }
 
     info!("Listening on http://{}", addr);
 
