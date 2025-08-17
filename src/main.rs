@@ -56,7 +56,7 @@ struct Cli {
     #[arg(long)]
     http_basic: Option<String>,
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(unix)]
     /// Run process in background
     #[arg(short, long, default_value_t = false)]
     detached: bool,
@@ -64,7 +64,7 @@ struct Cli {
 
 fn main() {
     let args = Cli::parse();
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(unix)]
     {
         if args.detached {
             let daemonize = daemonize::Daemonize::new();
