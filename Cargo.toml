@@ -19,7 +19,7 @@ tokio = { version = "1.43", features = ["macros", "rt-multi-thread"] }
 bytes = "1.9"
 http-body-util = "0.1.2"
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 hyper-util = { version="0.1.10",features = ["tokio"] }
 base64 = "0.22.1"
 
