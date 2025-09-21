@@ -3,19 +3,17 @@ name: Publish
 on:
   push:
     tags:
-      - '*'
+      - "*"
 
+permissions:
+  contents: write
 jobs:
   publish:
     name: Publish for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        name: [
-            linux,
-            windows,
-            macos
-        ]
+        name: [linux, windows, macos]
 
         include:
           - name: linux
@@ -32,20 +30,20 @@ jobs:
             asset_name: sthp-macos
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
 
-    - name: Build
-      run: cargo build --release --locked
+      - name: Build
+        run: cargo build --release --locked
 
-    - name: Upload binaries to release
-      uses: svenstaro/upload-release-action@v2
-      with:
-        repo_token: ${{ secrets.TOKEN_FOR_RELEASE }}
-        file: target/release/${{ matrix.artifact_name }}
-        asset_name: ${{ matrix.asset_name }}
-        tag: ${{ github.ref }}
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.TOKEN_FOR_RELEASE }}
+          file: target/release/${{ matrix.artifact_name }}
+          asset_name: ${{ matrix.asset_name }}
+          tag: ${{ github.ref }}
