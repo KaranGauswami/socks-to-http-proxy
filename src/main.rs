@@ -17,11 +17,11 @@ use tokio::net::TcpListener;
 #[group()]
 struct AuthParams {
     /// Socks5 username
-    #[arg(short = 'u', long, required = false)]
+    #[arg(short = 'u', long, env = "SOCKS5_USER", required = false)]
     username: String,
 
     /// Socks5 password
-    #[arg(short = 'P', long, required = false)]
+    #[arg(short = 'P', long, env = "SOCKS5_PASSWORD", required = false)]
     password: String,
 }
 
