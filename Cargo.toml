@@ -13,7 +13,7 @@ description = "Convert Socks5 proxy into Http proxy"
 [dependencies]
 color-eyre = { version = "0.6", default-features = false }
 hyper = { version = "1.12", features = ["client","server","http1"] }
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
 tokio-socks = "0.5"
 tokio = { version = "1.54", features = ["macros", "rt-multi-thread"] }
 bytes = "1.12"
