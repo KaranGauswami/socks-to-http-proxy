@@ -1,5 +1,5 @@
 use clap::{Args, Parser};
-use color_eyre::eyre::{OptionExt, Result};
+use color_eyre::eyre::{OptionExt, Result, WrapErr};
 
 use sthp::proxy::auth::Auth;
 use sthp::proxy_request;
@@ -62,7 +62,7 @@ struct Cli {
     detached: bool,
 }
 
-fn main() {
+fn main() -> Result<()> {
     let args = Cli::parse();
     #[cfg(unix)]
     {
@@ -74,12 +74,10 @@ fn main() {
         }
     }
 
-    tokio::runtime::Builder::new_multi_thread()
+    let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
-        .build()
-        .expect("Failed to build tokio runtime")
-        .block_on(main_entry(args))
-        .expect("Failed to run program")
+        .build()?;
+    runtime.block_on(main_entry(args))
 }
 
 async fn main_entry(args: Cli) -> Result<()> {
@@ -103,7 +101,9 @@ async fn main_entry(args: Cli) -> Result<()> {
         .transpose()?;
     let http_basic = &*Box::leak(Box::new(http_basic));
 
-    let listener = TcpListener::bind(addr).await?;
+    let listener = TcpListener::bind(addr)
+        .await
+        .wrap_err_with(|| format!("failed to bind HTTP proxy to {addr}"))?;
 
     info!("Listening on http://{}", addr);
 
